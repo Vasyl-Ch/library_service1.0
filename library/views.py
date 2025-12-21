@@ -1,3 +1,4 @@
+from django.core.serializers import serialize
 from django.shortcuts import render
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -16,7 +17,8 @@ from library.serializers import (
     AuthorSerializer,
     BookSerializer,
     BorrowingSerializer,
-    PaymentSerializer, BookListSerializer, BorrowingCreateSerializer, BorrowingListSerializer, BorrowingReturnSerializer
+    PaymentSerializer, BookListSerializer, BorrowingCreateSerializer, BorrowingListSerializer,
+    BorrowingReturnSerializer, PaymentListSerializer, PaymentCreateSerializer
 )
 
 
@@ -139,3 +141,97 @@ class BorrowingViewSet(LibraryBaseViewSet):
             status=status.HTTP_200_OK,
         )
 
+
+class PaymentViewSet(LibraryBaseViewSet):
+    permission_classes = (IsAuthenticated,)
+    filter_backends = (SearchFilter, OrderingFilter)
+    search_fields = ("borrowing__book__title",)
+    ordering_fields = ("status", "created_at",)
+    ordering = ("status","created_at",)
+
+    def get_queryset(self):
+        user = self.request.user
+
+        queryset = Payment.objects.select_related(
+            "borrowing",
+            "borrowing__book",
+            "borrowing__user"
+        )
+
+        if not user.is_staff:
+            queryset = queryset.filter(borrowing__user=user)
+
+        return queryset
+
+    def get_serializer_class(self):
+
+        if self.action == "list":
+            return PaymentListSerializer
+
+        if self.action in["create", "retrieve"]:
+            return PaymentCreateSerializer
+
+        return PaymentSerializer
+
+    def create(self, request, *args, **kwargs):
+
+        serializer = self.get_serializer(
+            data=request.data, context={"request": request}
+        )
+        serializer.is_valid(raise_exception=True)
+        payment = serializer.save()
+
+        try:
+            pass
+
+        except Exception as e:
+            payment.delete()
+            return Response(
+                {"error": f"Error when creating a payment: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    @action(detail=False, methods=["get"])
+    def success(self, request):
+        session_id = request.query_params.get("session_id")
+
+        if not session_id:
+            return Response(
+                {"error": "Session ID is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            pass
+
+        except Exception as e:
+            return Response({"error": f"Payment processing error: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=["get"])
+    def pending(self, request):
+
+        queryset = self.get_queryset().filter(
+            borrowing__user=request.user,
+            status=Payment.PaymentStatus.PENDING
+        )
+
+        serializer = PaymentCreateSerializer(queryset, many=True)
+
+        return Response({"count": queryset.count(), "results": serializer.data})
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+
+        if instance.status == Payment.PaymentStatus.PENDING:
+
+            try:
+                pass
+
+            except Exception as e:
+                return Response(
+                    {"error": f"Error updating payment link: {str(e)}"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)

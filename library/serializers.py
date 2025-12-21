@@ -29,7 +29,6 @@ class BookSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id"]
 
-
     def create(self, validated_data):
 
         with transaction.atomic():
@@ -124,7 +123,6 @@ class PaymentSerializer(serializers.ModelSerializer):
         ]
 
     def get_session_url(self, obj: Payment) -> None | str:
-
         if obj.status == Payment.PaymentStatus.PENDING and obj.money_to_pay > 0:
             return obj.session_url
         return None
@@ -241,7 +239,6 @@ class PaymentCreateSerializer(serializers.ModelSerializer):
 
 
 class BorrowingSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = Borrowing
         fields = [
@@ -274,7 +271,6 @@ class BorrowingListSerializer(serializers.ModelSerializer):
         ]
 
     def get_days_borrowed(self, obj: Borrowing) -> int:
-
         if obj.actual_return_date is not None:
             return (obj.actual_return_date - obj.borrow_date).days
 
@@ -282,7 +278,6 @@ class BorrowingListSerializer(serializers.ModelSerializer):
 
 
 class BorrowingCreateSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = Borrowing
         fields = [
@@ -345,7 +340,6 @@ class BorrowingCreateSerializer(serializers.ModelSerializer):
 
 
 class BorrowingReturnSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = Borrowing
         fields = ["id", "actual_return_date"]
@@ -375,32 +369,32 @@ class BorrowingReturnSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         current_date = timezone.localdate()
         request = self.context.get("request")
+        existing_payments = Payment.objects.filter(
+            borrowing=instance
+        )
 
-        with transaction.atomic():
-            existing_payments = Payment.objects.filter(
-                borrowing=instance
+        if not existing_payments.exists():
+            payment_serializer = PaymentCreateSerializer(
+                data={"borrowing": instance.id},
+                context={"request": request}
+            )
+            payment_serializer.is_valid(raise_exception=True)
+            payment_serializer.save()
+
+        has_pending_payments = Payment.objects.filter(
+            borrowing=instance,
+            status=Payment.PaymentStatus.PENDING
+        ).exists()
+
+        if has_pending_payments and not request.user.is_staff:
+            raise serializers.ValidationError(
+                "The book cannot be returned:"
+                " the invoice created must be paid."
             )
 
-            if not existing_payments.exists():
-                payment_serializer = PaymentCreateSerializer(
-                    data={"borrowing": instance.id},
-                    context={"request": request}
-                )
-                payment_serializer.is_valid(raise_exception=True)
-                payment_serializer.save()
+        with transaction.atomic():
 
-            is_paid = not Payment.objects.filter(
-                borrowing=instance,
-                status=Payment.PaymentStatus.PENDING
-            ).exists()
-
-            if not is_paid and not request.user.is_staff:
-                raise serializers.ValidationError(
-                    "The book cannot be returned:"
-                    " the invoice created must be paid."
-                )
-
-            book = Book.objects.select_for_update().get(id=instance.book.id)
+            book = Book.objects.select_for_update().get(id=instance.book_id)
             book.inventory += 1
             book.save()
 

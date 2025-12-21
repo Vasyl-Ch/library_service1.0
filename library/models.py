@@ -24,7 +24,7 @@ class Book(models.Model):
         SOFT = "Soft"
 
     title=models.CharField(max_length=100)
-    author=models.ManyToManyField(Author)
+    authors=models.ManyToManyField(to=Author)
     cover=models.CharField(
         choices=CoverType.choices,
         default=CoverType.SOFT,

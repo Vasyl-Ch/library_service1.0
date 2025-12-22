@@ -1,5 +1,3 @@
-from django.core.serializers import serialize
-from django.shortcuts import render
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -83,7 +81,7 @@ class BookViewSet(LibraryBaseViewSet):
         return super().destroy(request, *args, **kwargs)
 
 
-class BorrowingViewSet(LibraryBaseViewSet):
+class BorrowingViewSet(viewsets.ModelViewSet):
     permission_classes = (IsAuthenticated,)
     filter_backends = (SearchFilter, OrderingFilter)
     search_fields = ("book__title",)
@@ -158,7 +156,7 @@ class BorrowingViewSet(LibraryBaseViewSet):
         )
 
 
-class PaymentViewSet(LibraryBaseViewSet):
+class PaymentViewSet(viewsets.ModelViewSet):
     permission_classes = (IsAuthenticated,)
     filter_backends = (SearchFilter, OrderingFilter)
     search_fields = ("borrowing__book__title",)

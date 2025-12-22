@@ -4,7 +4,13 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 
-from library.models import Author, Book, Borrowing, Payment
+from library.models import (
+    Author,
+    Book,
+    Borrowing,
+    Payment
+)
+from library.stripe_system import StripeService
 
 
 class AuthorSerializer(serializers.ModelSerializer):
@@ -213,7 +219,7 @@ class PaymentCreateSerializer(serializers.ModelSerializer):
                 )
 
             actual_days = max(
-                (timezone.localdate() - borrowing.borrow_date).days, 1
+                (borrowing.expected_return_date - borrowing.borrow_date).days, 1
             )
             rental_money = borrowing.book.daily_fee * actual_days
 
@@ -241,6 +247,7 @@ class PaymentCreateSerializer(serializers.ModelSerializer):
 
 
 class BorrowingSerializer(serializers.ModelSerializer):
+
     class Meta:
         model = Borrowing
         fields = [
@@ -284,6 +291,7 @@ class BorrowingListSerializer(serializers.ModelSerializer):
 
 
 class BorrowingCreateSerializer(serializers.ModelSerializer):
+
     class Meta:
         model = Borrowing
         fields = [
@@ -346,6 +354,7 @@ class BorrowingCreateSerializer(serializers.ModelSerializer):
 
 
 class BorrowingReturnSerializer(serializers.ModelSerializer):
+
     class Meta:
         model = Borrowing
         fields = ["id", "actual_return_date"]
@@ -353,31 +362,30 @@ class BorrowingReturnSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         borrowing = self.instance
+
         if borrowing.actual_return_date is not None:
             raise serializers.ValidationError(
                 "The book has already been returned."
             )
 
         request = self.context.get("request")
-
         unpaid_payments = Payment.objects.filter(
             borrowing=borrowing,
             status=Payment.Status.PENDING
         )
+
         if unpaid_payments.exists() and not request.user.is_staff:
             raise serializers.ValidationError(
                 "You have unpaid invoices for this borrowing. "
                 "Pay them before returning."
             )
-
         return attrs
 
     def update(self, instance, validated_data):
+
         current_date = timezone.localdate()
         request = self.context.get("request")
-        existing_payments = Payment.objects.filter(
-            borrowing=instance
-        )
+        existing_payments = Payment.objects.filter(borrowing=instance)
 
         if not existing_payments.exists():
             payment_serializer = PaymentCreateSerializer(
@@ -387,6 +395,8 @@ class BorrowingReturnSerializer(serializers.ModelSerializer):
             payment_serializer.is_valid(raise_exception=True)
             payment_serializer.save()
 
+            StripeService.get_or_create_session_for_borrowing(instance, request)
+
         has_pending_payments = Payment.objects.filter(
             borrowing=instance,
             status=Payment.Status.PENDING
@@ -394,8 +404,8 @@ class BorrowingReturnSerializer(serializers.ModelSerializer):
 
         if has_pending_payments and not request.user.is_staff:
             raise serializers.ValidationError(
-                "The book cannot be returned:"
-                " the invoice created must be paid."
+                "The book cannot be returned: "
+                "the invoice created must be paid."
             )
 
         with transaction.atomic():

@@ -20,6 +20,7 @@ from library.serializers import (
     PaymentSerializer, BookListSerializer, BorrowingCreateSerializer, BorrowingListSerializer,
     BorrowingReturnSerializer, PaymentListSerializer, PaymentCreateSerializer
 )
+from library.stripe_system import StripeService
 
 
 class LibraryBaseViewSet(viewsets.ModelViewSet):
@@ -182,7 +183,17 @@ class PaymentViewSet(LibraryBaseViewSet):
         payment = serializer.save()
 
         try:
-            pass
+            stripe_data = StripeService.get_or_create_session_for_borrowing(
+                payment.borrowing, request
+            )
+            return Response(
+                {
+                    "message": "Payment session created/updated. Follow the link to pay.",
+                    "session_url": stripe_data["session_url"] if stripe_data else payment.session_url,
+                    "payment": PaymentSerializer(payment).data,
+                },
+                status=status.HTTP_201_CREATED,
+            )
 
         except Exception as e:
             payment.delete()
@@ -202,17 +213,58 @@ class PaymentViewSet(LibraryBaseViewSet):
             )
 
         try:
-            pass
+            payment = Payment.objects.filter(session_id=session_id).first()
+
+            if not payment:
+                return Response({"error": "Payment not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            if StripeService.is_session_paid(session_id):
+                session = StripeService.retrieve_session(session_id)
+
+                payment_ids_raw = session.metadata.get("payment_ids", "")
+                payment_ids = [int(pid) for pid in payment_ids_raw.split(",") if pid.isdigit()]
+
+                if not payment_ids:
+                    payment_ids = list(Payment.objects.filter(session_id=session_id).values_list('id', flat=True))
+
+                Payment.objects.filter(id__in=payment_ids).update(
+                    status=Payment.Status.PAID
+                )
+
+                return Response({
+                    "message": "Payment was successful!",
+                    "payment_ids": payment_ids,
+                    "status": "PAID",
+                })
+
+            return Response({"error": "Payment is not completed yet."}, status=status.HTTP_400_BAD_REQUEST)
+
 
         except Exception as e:
             return Response({"error": f"Payment processing error: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=["get"])
+    def cancel(self, request):
+        """
+        Payment cancellation processing.
+        Called when a user cancels a payment in Stripe.
+
+        GET /payments/cancel/
+        """
+        return Response(
+            {
+                "message": "Payment canceled. You can try again later.",
+                "note": "The payment remains in the PENDING status. "
+                        "You can pay it through the payment list.",
+            }
+        )
 
     @action(detail=False, methods=["get"])
     def pending(self, request):
 
         queryset = self.get_queryset().filter(
             borrowing__user=request.user,
-            status=Payment.PaymentStatus.PENDING
+            status=Payment.Status.PENDING
         )
 
         serializer = PaymentCreateSerializer(queryset, many=True)
@@ -222,10 +274,11 @@ class PaymentViewSet(LibraryBaseViewSet):
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
 
-        if instance.status == Payment.PaymentStatus.PENDING:
+        if instance.status == Payment.Status.PAID:
 
             try:
-                pass
+                StripeService.get_or_create_session_for_borrowing(instance.borrowing, request)
+                instance.refresh_from_db()
 
             except Exception as e:
                 return Response(

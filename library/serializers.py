@@ -56,24 +56,10 @@ class BookSerializer(serializers.ModelSerializer):
                 setattr(instance, attr, value)
 
             if authors_data is not None:
-                new_authors = []
-                for author_data in authors_data:
-                    author, _ = Author.objects.get_or_create(**author_data)
-                    new_authors.append(author)
-                instance.authors.set(new_authors)
+                instance.authors.set(authors_data)
 
         instance.save()
         return instance
-
-    def validate_inventory(self, value):
-        if value < 0:
-            raise serializers.ValidationError("Inventory cannot be negative")
-        return value
-
-    def validate_daily_fee(self, value):
-        if value < Decimal("0"):
-            raise serializers.ValidationError("Daily fee cannot be negative")
-        return value
 
 
 class BookListSerializer(serializers.ModelSerializer):
@@ -308,13 +294,6 @@ class BorrowingCreateSerializer(serializers.ModelSerializer):
             )
         return value
 
-    def validate_book(self, value):
-
-        if value.inventory <= 0:
-            raise serializers.ValidationError(
-                f"Book {value.title} is not available"
-            )
-        return value
 
     def validate(self, attrs):
 
@@ -339,13 +318,13 @@ class BorrowingCreateSerializer(serializers.ModelSerializer):
                 id=validated_data["book"].id
             )
 
-            if book.inventory > 0:
-                book.inventory -= 1
-                book.save()
-            else:
+            if book.inventory <= 0:
                 raise serializers.ValidationError(
-                    "This book is out of stock."
+                    f"Book {book.title} is not available"
                 )
+
+            book.inventory -= 1
+            book.save()
 
             borrowing = Borrowing.objects.create(
                 user=self.context["request"].user, **validated_data
@@ -387,17 +366,6 @@ class BorrowingReturnSerializer(serializers.ModelSerializer):
 
         current_date = timezone.localdate()
         request = self.context.get("request")
-        existing_payments = Payment.objects.filter(borrowing=instance)
-
-        if not existing_payments.exists():
-            payment_serializer = PaymentCreateSerializer(
-                data={"borrowing": instance.id},
-                context={"request": request}
-            )
-            payment_serializer.is_valid(raise_exception=True)
-            payment_serializer.save()
-
-            StripeService.get_or_create_session_for_borrowing(instance, request)
 
         has_pending_payments = Payment.objects.filter(
             borrowing=instance,
@@ -409,6 +377,18 @@ class BorrowingReturnSerializer(serializers.ModelSerializer):
                 "The book cannot be returned: "
                 "the invoice created must be paid."
             )
+
+        existing_payments = Payment.objects.filter(borrowing=instance)
+
+        if not existing_payments.exists():
+            payment_serializer = PaymentCreateSerializer(
+                data={"borrowing": instance.id},
+                context={"request": request}
+            )
+            payment_serializer.is_valid(raise_exception=True)
+            payment_serializer.save()
+
+            StripeService.get_or_create_session_for_borrowing(instance, request)
 
         with transaction.atomic():
 

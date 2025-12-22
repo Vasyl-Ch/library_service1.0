@@ -12,6 +12,7 @@ from library.models import (
     Payment
 )
 from library.permissions import IsAdminOrIfAuthenticatedReadOnly
+from library.tasks import send_payment_notification
 from library.serializers import (
     AuthorSerializer,
     BookSerializer,
@@ -257,6 +258,9 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 Payment.objects.filter(id__in=payment_ids).update(
                     status=Payment.Status.PAID
                 )
+
+                for payment_id in payment_ids:
+                    send_payment_notification.delay(payment_id)
 
                 return Response({
                     "message": "Payment was successful!",

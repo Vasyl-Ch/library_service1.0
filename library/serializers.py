@@ -11,6 +11,7 @@ from library.models import (
     Payment
 )
 from library.stripe_system import StripeService
+from library.tasks import send_borrowing_notification, send_return_notification
 
 
 class AuthorSerializer(serializers.ModelSerializer):
@@ -349,6 +350,7 @@ class BorrowingCreateSerializer(serializers.ModelSerializer):
             borrowing = Borrowing.objects.create(
                 user=self.context["request"].user, **validated_data
             )
+            send_borrowing_notification.delay(borrowing.id)
 
             return borrowing
 
@@ -416,5 +418,7 @@ class BorrowingReturnSerializer(serializers.ModelSerializer):
 
             instance.actual_return_date = current_date
             instance.save()
+
+        send_return_notification.delay(instance.id)
 
         return instance

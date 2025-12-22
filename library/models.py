@@ -52,7 +52,11 @@ class Book(models.Model):
 
 
 class Borrowing(models.Model):
-    book=models.ForeignKey(Book, on_delete=models.CASCADE)
+    book=models.ForeignKey(
+        Book,
+        on_delete=models.CASCADE,
+        related_name="borrowings"
+    )
     borrow_date=models.DateField(
         default=timezone.localdate,
         verbose_name="Borrow date"

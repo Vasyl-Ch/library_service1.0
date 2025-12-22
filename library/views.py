@@ -68,12 +68,12 @@ class BookViewSet(LibraryBaseViewSet):
         instance = self.get_object()
         active_borrowings = instance.borrowings.filter(
             actual_return_date__isnull=True
-        ).exists()
+        )
 
-        if active_borrowings:
+        if active_borrowings.exists():
             return Response(
                 {
-                    "detail": f"Can't delete a book. "
+                    "detail": f"Can't delete a {instance.title}. "
                               f"There are {active_borrowings.count()} active borrowings."
                 },
                 status=status.HTTP_400_BAD_REQUEST
@@ -309,7 +309,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
 
-        if instance.status == Payment.Status.PAID:
+        if instance.status == Payment.Status.PENDING:
 
             try:
                 StripeService.get_or_create_session_for_borrowing(instance.borrowing, request)

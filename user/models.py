@@ -16,6 +16,9 @@ class UserManager(BaseUserManager):
         if not email:
             raise ValueError("The given email must be set")
         email = self.normalize_email(email)
+
+        if not extra_fields.get("username"):
+            extra_fields["username"] = email.split("@")[0][:50]
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
@@ -41,11 +44,19 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractUser):
-    username = None
     email = models.EmailField(
         _("email address"),
         unique=True
     )
+    username = models.CharField(
+        max_length=50,
+        unique=False,
+        blank=True,
+        null=True,
+        help_text="Will be generated automatically from email.",
+    )
+
+    objects = UserManager()
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["first_name", "last_name"]

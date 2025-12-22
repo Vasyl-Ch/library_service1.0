@@ -1,5 +1,6 @@
 from django.core.serializers import serialize
 from django.shortcuts import render
+from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.filters import SearchFilter, OrderingFilter
@@ -41,6 +42,16 @@ class AuthorViewSet(LibraryBaseViewSet):
     ordering = ["name"]
 
 
+@extend_schema(
+    parameters=[
+        OpenApiParameter(
+            name="is_active",
+            type=str,
+            description="Filtering by Return Status: 'true', 'false'",
+            required=False,
+        )
+    ]
+)
 class BookViewSet(LibraryBaseViewSet):
     queryset = Book.objects.prefetch_related("authors")
     filter_backends = [SearchFilter, OrderingFilter]
@@ -124,6 +135,10 @@ class BorrowingViewSet(LibraryBaseViewSet):
 
         return Response(return_serializer.data, status=status.HTTP_201_CREATED)
 
+    @extend_schema(
+        responses={200: BorrowingListSerializer},
+        description="Method for returning the book (sets the actual return date)"
+    )
     @action(detail=True, methods=["post"], url_path="return")
     def return_book(self, request, *args, **kwargs):
         borrowing = self.get_object()
@@ -174,6 +189,10 @@ class PaymentViewSet(LibraryBaseViewSet):
 
         return PaymentSerializer
 
+    @extend_schema(
+        responses={201: PaymentSerializer},
+        description="Creates a payment and returns a Stripe payment link (session_url)"
+    )
     def create(self, request, *args, **kwargs):
 
         serializer = self.get_serializer(
@@ -202,6 +221,16 @@ class PaymentViewSet(LibraryBaseViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="session_id",
+                type=str,
+                description="Stripe session ID for payment confirmation",
+                required=True
+            )
+        ]
+    )
     @action(detail=False, methods=["get"])
     def success(self, request):
         session_id = request.query_params.get("session_id")
@@ -259,6 +288,10 @@ class PaymentViewSet(LibraryBaseViewSet):
             }
         )
 
+    @extend_schema(
+        responses={200: PaymentCreateSerializer(many=True)},
+        description="List of all pending (PENDING) payments of the current user"
+    )
     @action(detail=False, methods=["get"])
     def pending(self, request):
 

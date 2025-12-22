@@ -15,8 +15,10 @@ class AuthorSerializer(serializers.ModelSerializer):
 
 
 class BookSerializer(serializers.ModelSerializer):
-    authors = AuthorSerializer(many=True)
-
+    authors = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Author.objects.all()
+    )
     class Meta:
         model = Book
         fields = [
@@ -123,7 +125,7 @@ class PaymentSerializer(serializers.ModelSerializer):
         ]
 
     def get_session_url(self, obj: Payment) -> None | str:
-        if obj.status == Payment.PaymentStatus.PENDING and obj.money_to_pay > 0:
+        if obj.status == Payment.Status.PENDING and obj.money_to_pay > 0:
             return obj.session_url
         return None
 
@@ -187,7 +189,7 @@ class PaymentCreateSerializer(serializers.ModelSerializer):
         existing_payment = Payment.objects.filter(
             borrowing__user=borrowing.user,
             borrowing__book=borrowing.book,
-            status=Payment.PaymentStatus.PENDING,
+            status=Payment.Status.PENDING,
         ).first()
 
         if existing_payment:
@@ -204,7 +206,7 @@ class PaymentCreateSerializer(serializers.ModelSerializer):
         with transaction.atomic():
             if Payment.objects.filter(
                     borrowing=borrowing,
-                    status=Payment.PaymentStatus.PENDING
+                    status=Payment.Status.PENDING
             ).exists():
                 raise serializers.ValidationError(
                     "Pending payment already exists for this borrowing."
@@ -218,8 +220,8 @@ class PaymentCreateSerializer(serializers.ModelSerializer):
             payment = Payment.objects.create(
                 borrowing=borrowing,
                 money_to_pay=rental_money,
-                type=Payment.PaymentType.PAYMENT,
-                status=Payment.PaymentStatus.PENDING
+                type=Payment.Type.PAYMENT,
+                status=Payment.Status.PENDING
             )
 
             overdue_days = max(
@@ -231,8 +233,8 @@ class PaymentCreateSerializer(serializers.ModelSerializer):
                 Payment.objects.create(
                     borrowing=borrowing,
                     money_to_pay=fine_money,
-                    type=Payment.PaymentType.FINE,
-                    status=Payment.PaymentStatus.PENDING
+                    type=Payment.Type.FINE,
+                    status=Payment.Status.PENDING
                 )
 
         return payment
@@ -272,9 +274,13 @@ class BorrowingListSerializer(serializers.ModelSerializer):
 
     def get_days_borrowed(self, obj: Borrowing) -> int:
         if obj.actual_return_date is not None:
-            return (obj.actual_return_date - obj.borrow_date).days
+            diff = (obj.actual_return_date - obj.borrow_date).days
 
-        return (timezone.localdate() - obj.borrow_date).days
+        else:
+            diff = (timezone.localdate() - obj.borrow_date).days
+
+        return max(1, diff)
+
 
 
 class BorrowingCreateSerializer(serializers.ModelSerializer):
@@ -356,7 +362,7 @@ class BorrowingReturnSerializer(serializers.ModelSerializer):
 
         unpaid_payments = Payment.objects.filter(
             borrowing=borrowing,
-            status=Payment.PaymentStatus.PENDING
+            status=Payment.Status.PENDING
         )
         if unpaid_payments.exists() and not request.user.is_staff:
             raise serializers.ValidationError(
@@ -383,7 +389,7 @@ class BorrowingReturnSerializer(serializers.ModelSerializer):
 
         has_pending_payments = Payment.objects.filter(
             borrowing=instance,
-            status=Payment.PaymentStatus.PENDING
+            status=Payment.Status.PENDING
         ).exists()
 
         if has_pending_payments and not request.user.is_staff:

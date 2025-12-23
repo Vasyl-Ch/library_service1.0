@@ -31,6 +31,8 @@ jsonschema-specifications==2025.9.1
 kombu==5.6.1
 packaging==25.0
 prompt_toolkit==3.0.52
+psycopg==3.3.2
+psycopg2-binary==2.9.11
 PyJWT==2.10.1
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.1

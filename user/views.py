@@ -12,6 +12,7 @@ from user.serializers import (
 
 User = get_user_model()
 
+
 class UserViewSet(viewsets.ModelViewSet):
 
     queryset = User.objects.all()
@@ -37,7 +38,7 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(
         detail=False,
         methods=["get", "put", "patch"],
-        permission_classes=[IsAuthenticated]
+        permission_classes=[IsAuthenticated],
     )
     def me(self, request):
         user = request.user
@@ -48,9 +49,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
         elif request.method in ["PUT", "PATCH"]:
             serializer = UserDetailSerializer(
-                user,
-                data=request.data,
-                partial=(request.method == "PATCH")
+                user, data=request.data, partial=(request.method == "PATCH")
             )
             serializer.is_valid(raise_exception=True)
             serializer.save()
@@ -60,12 +59,9 @@ class UserViewSet(viewsets.ModelViewSet):
 
         if not request.user.is_staff:
             return Response(
-                {
-                    "detail":
-                        "You do not have privileges "
-                        "to view the list of users."
-                },
-                status=status.HTTP_403_FORBIDDEN
+                {"detail": "You do not have privileges "
+                           "to view the list of users."},
+                status=status.HTTP_403_FORBIDDEN,
             )
         return super().list(request, *args, **kwargs)
 
@@ -74,6 +70,6 @@ class UserViewSet(viewsets.ModelViewSet):
         if not request.user.is_staff:
             return Response(
                 {"detail": "You don't have rights to see other users."},
-                status=status.HTTP_403_FORBIDDEN
+                status=status.HTTP_403_FORBIDDEN,
             )
         return super().retrieve(request, *args, **kwargs)

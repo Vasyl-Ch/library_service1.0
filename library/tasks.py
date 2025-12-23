@@ -2,6 +2,7 @@ from celery import shared_task
 from django.utils import timezone
 from datetime import timedelta
 from decimal import Decimal
+
 from library.models import Borrowing, Payment
 from library.telegram_service import TelegramService
 
@@ -12,7 +13,9 @@ def send_borrowing_notification(borrowing_id):
     Triggered right after creating a Borrowing
     """
     try:
-        borrowing = Borrowing.objects.select_related('user', 'book').get(id=borrowing_id)
+        borrowing = Borrowing.objects.select_related("user", "book").get(
+            id=borrowing_id
+        )
         telegram = TelegramService()
         telegram.send_borrowing_notification(borrowing)
     except Borrowing.DoesNotExist:
@@ -25,7 +28,9 @@ def send_return_notification(borrowing_id):
     Triggered after setting actual_return_date
     """
     try:
-        borrowing = Borrowing.objects.select_related('user', 'book').get(id=borrowing_id)
+        borrowing = Borrowing.objects.select_related("user", "book").get(
+            id=borrowing_id
+        )
         telegram = TelegramService()
         telegram.send_return_notification(borrowing)
     except Borrowing.DoesNotExist:
@@ -39,8 +44,7 @@ def send_payment_notification(payment_id):
     """
     try:
         payment = Payment.objects.select_related(
-            'borrowing__user',
-            'borrowing__book'
+            "borrowing__user", "borrowing__book"
         ).get(id=payment_id)
         telegram = TelegramService()
         telegram.send_payment_notification(payment)
@@ -66,10 +70,11 @@ def send_daily_report():
     ).count()
 
     payments = Payment.objects.filter(
-        created_at__gte=yesterday,
-        status=Payment.Status.PAID
+        created_at__gte=yesterday, status=Payment.Status.PAID
     )
-    total_earned = sum(p.money_to_pay for p in payments) or Decimal('0')
+    total_earned = sum(
+        p.money_to_pay for p in payments
+    ) or Decimal("0")
 
     message = (
         f"📊 <b>Daily Report</b>\n"

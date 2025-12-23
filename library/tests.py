@@ -1,9 +1,3 @@
-"""
-Tests for Library API custom logic
-Level: Junior
-Only testing areas with potential issues
-"""
-
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -13,7 +7,11 @@ from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from datetime import date, timedelta
 
-from library.models import Book, Author, Borrowing
+from library.models import (
+    Book,
+    Author,
+    Borrowing
+)
 from library.serializers import (
     BorrowingCreateSerializer,
     BorrowingReturnSerializer
@@ -31,7 +29,7 @@ class BorrowingModelTests(TestCase):
             email="test@test.com",
             password="pass123",
             first_name="Test",
-            last_name="User"
+            last_name="User",
         )
 
         author = Author.objects.create(name="John", surname="Doe")
@@ -50,7 +48,7 @@ class BorrowingModelTests(TestCase):
             book=self.book,
             user=self.user,
             expected_return_date=date.today() + timedelta(days=7),
-            actual_return_date=None
+            actual_return_date=None,
         )
 
         self.assertTrue(borrowing.is_active)
@@ -61,7 +59,7 @@ class BorrowingModelTests(TestCase):
             book=self.book,
             user=self.user,
             expected_return_date=date.today() + timedelta(days=7),
-            actual_return_date=date.today()
+            actual_return_date=date.today(),
         )
 
         self.assertFalse(borrowing.is_active)
@@ -75,7 +73,7 @@ class BorrowingCreateSerializerTests(TestCase):
             email="test@test.com",
             password="pass123",
             first_name="Test",
-            last_name="User"
+            last_name="User",
         )
 
         author = Author.objects.create(name="Author", surname="Test")
@@ -84,7 +82,7 @@ class BorrowingCreateSerializerTests(TestCase):
             title="Available Book",
             cover=Book.CoverType.SOFT,
             inventory=3,
-            daily_fee=1.50
+            daily_fee=1.50,
         )
         self.book.authors.add(author)
 
@@ -107,12 +105,11 @@ class BorrowingCreateSerializerTests(TestCase):
 
         data = {
             "book": self.book.id,
-            "expected_return_date": date.today() + timedelta(days=5)
+            "expected_return_date": date.today() + timedelta(days=5),
         }
 
         serializer = BorrowingCreateSerializer(
-            data=data,
-            context={"request": self._get_mock_request(self.user)}
+            data=data, context={"request": self._get_mock_request(self.user)}
         )
 
         self.assertTrue(serializer.is_valid())
@@ -128,12 +125,11 @@ class BorrowingCreateSerializerTests(TestCase):
 
         data = {
             "book": self.book.id,
-            "expected_return_date": date.today() + timedelta(days=5)
+            "expected_return_date": date.today() + timedelta(days=5),
         }
 
         serializer = BorrowingCreateSerializer(
-            data=data,
-            context={"request": self._get_mock_request(self.user)}
+            data=data, context={"request": self._get_mock_request(self.user)}
         )
 
         self.assertTrue(serializer.is_valid())
@@ -147,17 +143,16 @@ class BorrowingCreateSerializerTests(TestCase):
             book=self.book,
             user=self.user,
             expected_return_date=date.today() + timedelta(days=7),
-            actual_return_date=None
+            actual_return_date=None,
         )
 
         data = {
             "book": self.book.id,
-            "expected_return_date": date.today() + timedelta(days=5)
+            "expected_return_date": date.today() + timedelta(days=5),
         }
 
         serializer = BorrowingCreateSerializer(
-            data=data,
-            context={"request": self._get_mock_request(self.user)}
+            data=data, context={"request": self._get_mock_request(self.user)}
         )
 
         with self.assertRaises(ValidationError):
@@ -167,21 +162,17 @@ class BorrowingCreateSerializerTests(TestCase):
         """Test 6: Expected return date cannot be in the past"""
         past_date = timezone.now().date() - timedelta(days=1)
 
-        data = {
-            "book": self.book.id,
-            "expected_return_date": past_date
-        }
+        data = {"book": self.book.id, "expected_return_date": past_date}
 
         serializer = BorrowingCreateSerializer(
-            data=data,
-            context={"request": self._get_mock_request(self.user)}
+            data=data, context={"request": self._get_mock_request(self.user)}
         )
 
         self.assertFalse(serializer.is_valid())
         self.assertIn("expected_return_date", serializer.errors)
         self.assertEqual(
             str(serializer.errors["expected_return_date"][0]),
-            "Expected return date cannot be in the past"
+            "Expected return date cannot be in the past",
         )
 
 
@@ -193,7 +184,7 @@ class BorrowingReturnSerializerTests(TestCase):
             email="test@test.com",
             password="pass123",
             first_name="Test",
-            last_name="User"
+            last_name="User",
         )
 
         author = Author.objects.create(name="Author", surname="Test")
@@ -202,7 +193,7 @@ class BorrowingReturnSerializerTests(TestCase):
             title="Book to Return",
             cover=Book.CoverType.SOFT,
             inventory=2,
-            daily_fee=2.00
+            daily_fee=2.00,
         )
         self.book.authors.add(author)
 
@@ -210,7 +201,7 @@ class BorrowingReturnSerializerTests(TestCase):
             book=self.book,
             user=self.user,
             expected_return_date=date.today() + timedelta(days=3),
-            actual_return_date=None
+            actual_return_date=None,
         )
 
     def _get_mock_request(self, user):
@@ -232,7 +223,7 @@ class BorrowingReturnSerializerTests(TestCase):
         serializer = BorrowingReturnSerializer(
             instance=self.borrowing,
             data={},
-            context={"request": self._get_mock_request(self.user)}
+            context={"request": self._get_mock_request(self.user)},
         )
 
         self.assertTrue(serializer.is_valid())
@@ -249,7 +240,7 @@ class BorrowingReturnSerializerTests(TestCase):
         serializer = BorrowingReturnSerializer(
             instance=self.borrowing,
             data={},
-            context={"request": self._get_mock_request(self.user)}
+            context={"request": self._get_mock_request(self.user)},
         )
 
         with self.assertRaises(ValidationError):
@@ -266,7 +257,7 @@ class BorrowingViewSetTests(TestCase):
             email="user@test.com",
             password="pass123",
             first_name="Regular",
-            last_name="User"
+            last_name="User",
         )
 
         author = Author.objects.create(name="Author", surname="Test")
@@ -287,14 +278,14 @@ class BorrowingViewSetTests(TestCase):
             book=self.book,
             user=self.user,
             expected_return_date=date.today() + timedelta(days=5),
-            actual_return_date=None
+            actual_return_date=None,
         )
 
         Borrowing.objects.create(
             book=self.book,
             user=self.user,
             expected_return_date=date.today() + timedelta(days=5),
-            actual_return_date=date.today()
+            actual_return_date=date.today(),
         )
 
         url = reverse("library:borrowing-list")
@@ -310,19 +301,19 @@ class BorrowingViewSetTests(TestCase):
             email="other@test.com",
             password="pass123",
             first_name="Other",
-            last_name="User"
+            last_name="User",
         )
 
         own = Borrowing.objects.create(
             book=self.book,
             user=self.user,
-            expected_return_date=date.today() + timedelta(days=5)
+            expected_return_date=date.today() + timedelta(days=5),
         )
 
         Borrowing.objects.create(
             book=self.book,
             user=other_user,
-            expected_return_date=date.today() + timedelta(days=5)
+            expected_return_date=date.today() + timedelta(days=5),
         )
 
         url = reverse("library:borrowing-list")

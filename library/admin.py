@@ -6,4 +6,3 @@ admin.site.register(Payment)
 admin.site.register(Book)
 admin.site.register(Borrowing)
 admin.site.register(Author)
-

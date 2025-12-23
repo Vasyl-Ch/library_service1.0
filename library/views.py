@@ -5,20 +5,20 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 
-from library.models import (
-    Author,
-    Book,
-    Borrowing,
-    Payment
-)
+from library.models import Author, Book, Borrowing, Payment
 from library.permissions import IsAdminOrIfAuthenticatedReadOnly
 from library.tasks import send_payment_notification
 from library.serializers import (
     AuthorSerializer,
     BookSerializer,
     BorrowingSerializer,
-    PaymentSerializer, BookListSerializer, BorrowingCreateSerializer, BorrowingListSerializer,
-    BorrowingReturnSerializer, PaymentListSerializer, PaymentCreateSerializer
+    PaymentSerializer,
+    BookListSerializer,
+    BorrowingCreateSerializer,
+    BorrowingListSerializer,
+    BorrowingReturnSerializer,
+    PaymentListSerializer,
+    PaymentCreateSerializer,
 )
 from library.stripe_system import StripeService
 
@@ -74,9 +74,9 @@ class BookViewSet(LibraryBaseViewSet):
             return Response(
                 {
                     "detail": f"Can't delete a {instance.title}. "
-                              f"There are {active_borrowings.count()} active borrowings."
+                    f"There are {active_borrowings.count()} active borrowings."
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         return super().destroy(request, *args, **kwargs)
@@ -123,8 +123,7 @@ class BorrowingViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(
-            data=request.data,
-            context={"request": request}
+            data=request.data, context={"request": request}
         )
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
@@ -136,7 +135,8 @@ class BorrowingViewSet(viewsets.ModelViewSet):
 
     @extend_schema(
         responses={200: BorrowingListSerializer},
-        description="Method for returning the book (sets the actual return date)"
+        description="Method for returning the book "
+                    "(sets the actual return date)",
     )
     @action(detail=True, methods=["post"], url_path="return")
     def return_book(self, request, *args, **kwargs):
@@ -161,16 +161,20 @@ class PaymentViewSet(viewsets.ModelViewSet):
     permission_classes = (IsAuthenticated,)
     filter_backends = (SearchFilter, OrderingFilter)
     search_fields = ("borrowing__book__title",)
-    ordering_fields = ("status", "created_at",)
-    ordering = ("status","created_at",)
+    ordering_fields = (
+        "status",
+        "created_at",
+    )
+    ordering = (
+        "status",
+        "created_at",
+    )
 
     def get_queryset(self):
         user = self.request.user
 
         queryset = Payment.objects.select_related(
-            "borrowing",
-            "borrowing__book",
-            "borrowing__user"
+            "borrowing", "borrowing__book", "borrowing__user"
         )
 
         if not user.is_staff:
@@ -183,14 +187,15 @@ class PaymentViewSet(viewsets.ModelViewSet):
         if self.action == "list":
             return PaymentListSerializer
 
-        if self.action in["create", "retrieve"]:
+        if self.action in ["create", "retrieve"]:
             return PaymentCreateSerializer
 
         return PaymentSerializer
 
     @extend_schema(
         responses={201: PaymentSerializer},
-        description="Creates a payment and returns a Stripe payment link (session_url)"
+        description="Creates a payment and returns a "
+                    "Stripe payment link (session_url)",
     )
     def create(self, request, *args, **kwargs):
 
@@ -206,8 +211,13 @@ class PaymentViewSet(viewsets.ModelViewSet):
             )
             return Response(
                 {
-                    "message": "Payment session created/updated. Follow the link to pay.",
-                    "session_url": stripe_data["session_url"] if stripe_data else payment.session_url,
+                    "message": "Payment session created/updated. "
+                               "Follow the link to pay.",
+                    "session_url": (
+                        stripe_data["session_url"]
+                        if stripe_data
+                        else payment.session_url
+                    ),
                     "payment": PaymentSerializer(payment).data,
                 },
                 status=status.HTTP_201_CREATED,
@@ -226,7 +236,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 name="session_id",
                 type=str,
                 description="Stripe session ID for payment confirmation",
-                required=True
+                required=True,
             )
         ]
     )
@@ -244,16 +254,30 @@ class PaymentViewSet(viewsets.ModelViewSet):
             payment = Payment.objects.filter(session_id=session_id).first()
 
             if not payment:
-                return Response({"error": "Payment not found."}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"error": "Payment not found."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
 
             if StripeService.is_session_paid(session_id):
                 session = StripeService.retrieve_session(session_id)
 
                 payment_ids_raw = session.metadata.get("payment_ids", "")
-                payment_ids = [int(pid) for pid in payment_ids_raw.split(",") if pid.isdigit()]
+                payment_ids = [
+                    int(pid)
+                    for pid
+                    in payment_ids_raw.split(",")
+                    if pid.isdigit()
+                ]
 
                 if not payment_ids:
-                    payment_ids = list(Payment.objects.filter(session_id=session_id).values_list('id', flat=True))
+                    payment_ids = list(
+                        Payment.objects.filter(
+                            session_id=session_id
+                        ).values_list(
+                            "id", flat=True
+                        )
+                    )
 
                 Payment.objects.filter(id__in=payment_ids).update(
                     status=Payment.Status.PAID
@@ -262,17 +286,24 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 for payment_id in payment_ids:
                     send_payment_notification.delay(payment_id)
 
-                return Response({
-                    "message": "Payment was successful!",
-                    "payment_ids": payment_ids,
-                    "status": "PAID",
-                })
+                return Response(
+                    {
+                        "message": "Payment was successful!",
+                        "payment_ids": payment_ids,
+                        "status": "PAID",
+                    }
+                )
 
-            return Response({"error": "Payment is not completed yet."}, status=status.HTTP_400_BAD_REQUEST)
-
+            return Response(
+                {"error": "Payment is not completed yet."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         except Exception as e:
-            return Response({"error": f"Payment processing error: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": f"Payment processing error: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     @action(detail=False, methods=["get"])
     def cancel(self, request):
@@ -286,25 +317,28 @@ class PaymentViewSet(viewsets.ModelViewSet):
             {
                 "message": "Payment canceled. You can try again later.",
                 "note": "The payment remains in the PENDING status. "
-                        "You can pay it through the payment list.",
+                "You can pay it through the payment list.",
             }
         )
 
     @extend_schema(
         responses={200: PaymentCreateSerializer(many=True)},
-        description="List of all pending (PENDING) payments of the current user"
+        description="List of all pending (PENDING) "
+                    "payments of the current user",
     )
     @action(detail=False, methods=["get"])
     def pending(self, request):
 
         queryset = self.get_queryset().filter(
-            borrowing__user=request.user,
-            status=Payment.Status.PENDING
+            borrowing__user=request.user, status=Payment.Status.PENDING
         )
 
         serializer = PaymentCreateSerializer(queryset, many=True)
 
-        return Response({"count": queryset.count(), "results": serializer.data})
+        return Response(
+            {"count": queryset.count(),
+             "results": serializer.data}
+        )
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -312,13 +346,15 @@ class PaymentViewSet(viewsets.ModelViewSet):
         if instance.status == Payment.Status.PENDING:
 
             try:
-                StripeService.get_or_create_session_for_borrowing(instance.borrowing, request)
+                StripeService.get_or_create_session_for_borrowing(
+                    instance.borrowing, request
+                )
                 instance.refresh_from_db()
 
             except Exception as e:
                 return Response(
                     {"error": f"Error updating payment link: {str(e)}"},
-                    status=status.HTTP_400_BAD_REQUEST
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
         serializer = self.get_serializer(instance)

@@ -6,6 +6,7 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
+
 class TelegramService:
     """Service for sending notifications to Telegram"""
 
@@ -17,9 +18,7 @@ class TelegramService:
         """Asynchronous message sending"""
         try:
             await self.bot.send_message(
-                chat_id=self.chat_id,
-                text=message,
-                parse_mode='HTML'
+                chat_id=self.chat_id, text=message, parse_mode="HTML"
             )
             logger.info(f"Message sent to Telegram: {message[:50]}...")
             return True

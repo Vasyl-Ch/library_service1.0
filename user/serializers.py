@@ -7,14 +7,10 @@ User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source="__str__", read_only=True)
+
     class Meta:
         model = User
-        fields = [
-            "id",
-            "full_name",
-            "email",
-            "is_staff"
-        ]
+        fields = ["id", "full_name", "email", "is_staff"]
         read_only_fields = ["id", "is_staff"]
 
 
@@ -74,7 +70,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
             "is_staff",
             "date_joined",
             "borrowings_count",
-            "active_borrowings"
+            "active_borrowings",
         ]
         read_only_fields = ["id", "is_staff", "date_joined"]
 
@@ -85,5 +81,5 @@ class UserDetailSerializer(serializers.ModelSerializer):
         return getattr(
             obj,
             "active_borrowings",
-            obj.borrowings.filter(actual_return_date__isnull=True).count()
+            obj.borrowings.filter(actual_return_date__isnull=True).count(),
         )

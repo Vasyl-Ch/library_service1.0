@@ -23,19 +23,19 @@ class Book(models.Model):
         HARD = "Hard"
         SOFT = "Soft"
 
-    title=models.CharField(max_length=100)
-    authors=models.ManyToManyField(to=Author)
-    cover=models.CharField(
+    title = models.CharField(max_length=100)
+    authors = models.ManyToManyField(to=Author)
+    cover = models.CharField(
         choices=CoverType.choices,
         default=CoverType.SOFT,
         verbose_name="Book cover type",
     )
-    inventory=models.PositiveIntegerField(
+    inventory = models.PositiveIntegerField(
         default=1,
         validators=[MinValueValidator(1)],
         verbose_name="Book inventory",
     )
-    daily_fee=models.DecimalField(
+    daily_fee = models.DecimalField(
         max_digits=7,
         decimal_places=2,
         validators=[MinValueValidator(Decimal("0.01"))],
@@ -52,28 +52,28 @@ class Book(models.Model):
 
 
 class Borrowing(models.Model):
-    book=models.ForeignKey(
+    book = models.ForeignKey(
         Book,
         on_delete=models.CASCADE,
         related_name="borrowings"
     )
-    borrow_date=models.DateField(
+    borrow_date = models.DateField(
         default=timezone.localdate,
         verbose_name="Borrow date"
     )
-    expected_return_date=models.DateField(
+    expected_return_date = models.DateField(
         verbose_name="Expected return date"
     )
-    actual_return_date=models.DateField(
+    actual_return_date = models.DateField(
         null=True,
         blank=True,
         verbose_name="Actual return date"
     )
-    user=models.ForeignKey(
+    user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete = models.CASCADE,
-        related_name = "borrowings",
-        verbose_name = "User"
+        on_delete=models.CASCADE,
+        related_name="borrowings",
+        verbose_name="User",
     )
 
     class Meta:
@@ -82,8 +82,11 @@ class Borrowing(models.Model):
         ordering = ["-borrow_date"]
 
     def __str__(self):
-        status = "Returned" if self.actual_return_date else "Not returned"
-        return f"{self.user.email} borrowed {self.book.title} ({status})"
+        status = "Returned" \
+            if self.actual_return_date \
+            else "Not returned"
+        return (f"{self.user.email} "
+                f"borrowed {self.book.title} ({status})")
 
     @property
     def is_active(self):
@@ -100,34 +103,35 @@ class Payment(models.Model):
         PAYMENT = "Payment"
         FINE = "Fine"
 
-    status=models.CharField(
+    status = models.CharField(
         choices=Status.choices,
         default=Status.PENDING,
         verbose_name="Payment Status",
     )
-    type=models.CharField(
+    payment_type = models.CharField(
+        max_length=20,
         choices=Type.choices,
         default=Type.PAYMENT,
         verbose_name="Payment Type",
     )
-    borrowing=models.ForeignKey(Borrowing, on_delete=models.CASCADE)
-    session_url=models.URLField(
+    borrowing = models.ForeignKey(Borrowing, on_delete=models.CASCADE)
+    session_url = models.URLField(
         blank=True,
         null=True,
         verbose_name="Session URL"
     )
-    session_id=models.CharField(
+    session_id = models.CharField(
         blank=True,
         null=True,
         verbose_name="Session ID"
     )
-    money_to_pay=models.DecimalField(
+    money_to_pay = models.DecimalField(
         max_digits=7,
         decimal_places=2,
         validators=[MinValueValidator(Decimal("0.01"))],
-        verbose_name="Money to pay"
+        verbose_name="Money to pay",
     )
-    created_at=models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         verbose_name = "Payment"
@@ -135,4 +139,5 @@ class Payment(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"Payment {self.type} - {self.money_to_pay} ({self.status})"
+        return (f"Payment {self.payment_type} "
+                f"- {self.money_to_pay} ({self.status})")

@@ -11,7 +11,10 @@ from library.models import (
     Payment
 )
 from library.stripe_system import StripeService
-from library.tasks import send_borrowing_notification, send_return_notification
+from library.tasks import (
+    send_borrowing_notification,
+    send_return_notification
+)
 
 
 class AuthorSerializer(serializers.ModelSerializer):
@@ -23,9 +26,9 @@ class AuthorSerializer(serializers.ModelSerializer):
 
 class BookSerializer(serializers.ModelSerializer):
     authors = serializers.PrimaryKeyRelatedField(
-        many=True,
-        queryset=Author.objects.all()
+        many=True, queryset=Author.objects.all()
     )
+
     class Meta:
         model = Book
         fields = [
@@ -75,12 +78,13 @@ class BookListSerializer(serializers.ModelSerializer):
             "cover",
             "inventory",
             "daily_fee",
-            "availability"
+            "availability",
         ]
 
     def get_authors(self, obj: Book) -> list[str]:
         return [
-            f"{author.name} {author.surname}" for author in obj.authors.all()
+            f"{author.name} {author.surname}"
+            for author in obj.authors.all()
         ]
 
     def get_availability(self, obj: Book) -> str:
@@ -88,8 +92,14 @@ class BookListSerializer(serializers.ModelSerializer):
 
 
 class PaymentSerializer(serializers.ModelSerializer):
-    user_email = serializers.EmailField(source="borrowing.user.email", read_only=True)
-    book_title = serializers.CharField(source="borrowing.book.title", read_only=True)
+    user_email = serializers.EmailField(
+        source="borrowing.user.email",
+        read_only=True
+    )
+    book_title = serializers.CharField(
+        source="borrowing.book.title",
+        read_only=True
+    )
     session_url = serializers.SerializerMethodField()
 
     class Meta:
@@ -104,7 +114,7 @@ class PaymentSerializer(serializers.ModelSerializer):
             "money_to_pay",
             "session_url",
             "session_id",
-            "created_at"
+            "created_at",
         ]
         read_only_fields = [
             "id",
@@ -114,19 +124,31 @@ class PaymentSerializer(serializers.ModelSerializer):
             "money_to_pay",
             "session_url",
             "session_id",
-            "created_at"
+            "created_at",
         ]
 
     def get_session_url(self, obj: Payment) -> None | str:
-        if obj.status == Payment.Status.PENDING and obj.money_to_pay > 0:
+        if (
+                obj.status == Payment.Status.PENDING
+                and obj.money_to_pay > 0
+        ):
             return obj.session_url
         return None
 
 
 class PaymentListSerializer(serializers.ModelSerializer):
-    borrowing_id = serializers.CharField(source="borrowing.id", read_only=True)
-    username = serializers.CharField(source="borrowing.user.get_full_name", read_only=True)
-    book_title = serializers.CharField(source="borrowing.book.title", read_only=True)
+    borrowing_id = serializers.CharField(
+        source="borrowing.id",
+        read_only=True
+    )
+    username = serializers.CharField(
+        source="borrowing.user.get_full_name",
+        read_only=True
+    )
+    book_title = serializers.CharField(
+        source="borrowing.book.title",
+        read_only=True
+    )
     session_url = serializers.SerializerMethodField()
 
     class Meta:
@@ -140,13 +162,17 @@ class PaymentListSerializer(serializers.ModelSerializer):
             "book_title",
             "money_to_pay",
             "session_url",
-            "created_at"
+            "created_at",
         ]
 
     def get_session_url(self, obj: Payment) -> str | None:
-        if obj.status == Payment.Status.PENDING and obj.money_to_pay > 0:
+        if (
+                obj.status == Payment.Status.PENDING
+                and obj.money_to_pay > 0
+        ):
             return obj.session_url
         return None
+
 
 class PaymentCreateSerializer(serializers.ModelSerializer):
     borrowing = serializers.PrimaryKeyRelatedField(
@@ -155,9 +181,7 @@ class PaymentCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Payment
-        fields = [
-            "borrowing"
-        ]
+        fields = ["borrowing"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -204,15 +228,15 @@ class PaymentCreateSerializer(serializers.ModelSerializer):
 
         with transaction.atomic():
             if Payment.objects.filter(
-                    borrowing=borrowing,
-                    status=Payment.Status.PENDING
+                borrowing=borrowing, status=Payment.Status.PENDING
             ).exists():
                 raise serializers.ValidationError(
                     "Pending payment already exists for this borrowing."
                 )
 
             actual_days = max(
-                (borrowing.expected_return_date - borrowing.borrow_date).days, 1
+                (borrowing.expected_return_date
+                 - borrowing.borrow_date).days, 1
             )
             rental_money = borrowing.book.daily_fee * actual_days
 
@@ -220,20 +244,26 @@ class PaymentCreateSerializer(serializers.ModelSerializer):
                 borrowing=borrowing,
                 money_to_pay=rental_money,
                 type=Payment.Type.PAYMENT,
-                status=Payment.Status.PENDING
+                status=Payment.Status.PENDING,
             )
 
             overdue_days = max(
-                0, (timezone.localdate() - borrowing.expected_return_date).days
+                0, (timezone.localdate()
+                    - borrowing.expected_return_date).days
             )
 
             if overdue_days > 0:
-                fine_money = overdue_days * borrowing.book.daily_fee * Decimal("2")
+                fine_money = (
+                    overdue_days
+                    * borrowing.book.daily_fee
+                    * Decimal("2")
+                )
+
                 Payment.objects.create(
                     borrowing=borrowing,
                     money_to_pay=fine_money,
                     type=Payment.Type.FINE,
-                    status=Payment.Status.PENDING
+                    status=Payment.Status.PENDING,
                 )
 
         return payment
@@ -248,7 +278,7 @@ class BorrowingSerializer(serializers.ModelSerializer):
             "borrow_date",
             "expected_return_date",
             "actual_return_date",
-            "user"
+            "user",
         ]
         read_only_fields = ["id", "borrow_date", "actual_return_date"]
 
@@ -269,47 +299,37 @@ class BorrowingListSerializer(serializers.ModelSerializer):
             "expected_return_date",
             "actual_return_date",
             "is_active",
-            "days_borrowed"
+            "days_borrowed",
         ]
 
     def get_days_borrowed(self, obj: Borrowing) -> int:
         if obj.actual_return_date is not None:
             diff = (obj.actual_return_date - obj.borrow_date).days
-
         else:
             diff = (timezone.localdate() - obj.borrow_date).days
 
         return max(1, diff)
 
 
-
 class BorrowingCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Borrowing
-        fields = [
-            "book",
-            "expected_return_date"
-        ]
+        fields = ["book", "expected_return_date"]
 
     def validate_expected_return_date(self, value):
-
         if value < timezone.now().date():
             raise serializers.ValidationError(
                 "Expected return date cannot be in the past"
             )
         return value
 
-
     def validate(self, attrs):
-
         user = self.context["request"].user
         book = attrs["book"]
 
         if Borrowing.objects.filter(
-                book=book,
-                user=user,
-                actual_return_date__isnull=True
+            book=book, user=user, actual_return_date__isnull=True
         ).exists():
             raise serializers.ValidationError(
                 "User already has this book borrowed"
@@ -357,8 +377,7 @@ class BorrowingReturnSerializer(serializers.ModelSerializer):
 
         request = self.context.get("request")
         unpaid_payments = Payment.objects.filter(
-            borrowing=borrowing,
-            status=Payment.Status.PENDING
+            borrowing=borrowing, status=Payment.Status.PENDING
         )
 
         if unpaid_payments.exists() and not request.user.is_staff:
@@ -369,13 +388,11 @@ class BorrowingReturnSerializer(serializers.ModelSerializer):
         return attrs
 
     def update(self, instance, validated_data):
-
         current_date = timezone.localdate()
         request = self.context.get("request")
 
         has_pending_payments = Payment.objects.filter(
-            borrowing=instance,
-            status=Payment.Status.PENDING
+            borrowing=instance, status=Payment.Status.PENDING
         ).exists()
 
         if has_pending_payments and not request.user.is_staff:
@@ -388,13 +405,15 @@ class BorrowingReturnSerializer(serializers.ModelSerializer):
 
         if not existing_payments.exists():
             payment_serializer = PaymentCreateSerializer(
-                data={"borrowing": instance.id},
-                context={"request": request}
+                data={"borrowing": instance.id}, context={"request": request}
             )
             payment_serializer.is_valid(raise_exception=True)
             payment_serializer.save()
 
-            StripeService.get_or_create_session_for_borrowing(instance, request)
+            StripeService.get_or_create_session_for_borrowing(
+                instance,
+                request
+            )
 
         with transaction.atomic():
 

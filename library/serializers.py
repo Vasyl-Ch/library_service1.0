@@ -123,9 +123,11 @@ class PaymentSerializer(serializers.ModelSerializer):
         return None
 
 
-class PaymentListSerializer(PaymentSerializer):
+class PaymentListSerializer(serializers.ModelSerializer):
     borrowing_id = serializers.CharField(source="borrowing.id", read_only=True)
-    username = serializers.CharField(source="borrowing.user.__str__", read_only=True)
+    username = serializers.CharField(source="borrowing.user.get_full_name", read_only=True)
+    book_title = serializers.CharField(source="borrowing.book.title", read_only=True)
+    session_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Payment
@@ -141,6 +143,10 @@ class PaymentListSerializer(PaymentSerializer):
             "created_at"
         ]
 
+    def get_session_url(self, obj: Payment) -> str | None:
+        if obj.status == Payment.Status.PENDING and obj.money_to_pay > 0:
+            return obj.session_url
+        return None
 
 class PaymentCreateSerializer(serializers.ModelSerializer):
     borrowing = serializers.PrimaryKeyRelatedField(
@@ -249,7 +255,7 @@ class BorrowingSerializer(serializers.ModelSerializer):
 
 class BorrowingListSerializer(serializers.ModelSerializer):
     book = serializers.CharField(source="book.title", read_only=True)
-    user = serializers.CharField(source="user.__str__", read_only=True)
+    user = serializers.CharField(source="user.get_full_name", read_only=True)
     is_active = serializers.BooleanField(read_only=True)
     days_borrowed = serializers.SerializerMethodField()
 

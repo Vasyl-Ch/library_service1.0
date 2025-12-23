@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 from dotenv import load_dotenv
@@ -184,3 +185,27 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "Library API",
     "SERVE_INCLUDE_SCHEMA": False,
 }
+
+TESTING = "test" in sys.argv
+
+if TESTING:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        }
+    }
+
+    CELERY_TASK_ALWAYS_EAGER = True
+    CELERY_TASK_EAGER_PROPAGATES = True
+
+    AUTH_PASSWORD_VALIDATORS = []
+
+    STRIPE_SECRET_KEY = "sk_test_fake_key_for_testing"
+    STRIPE_PUBLISHABLE_KEY = "pk_test_fake_key_for_testing"
+
+    TELEGRAM_BOT_TOKEN = "fake_token_for_testing"
+    TELEGRAM_CHAT_ID = "fake_chat_id_for_testing"
+
+    CELERY_BROKER_URL = "memory://"
+    CELERY_RESULT_BACKEND = "cache+memory://"

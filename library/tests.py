@@ -1,3 +1,4 @@
+from unittest.mock import patch, MagicMock
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -99,7 +100,8 @@ class BorrowingCreateSerializerTests(TestCase):
 
         return MockRequest(user)
 
-    def test_create_borrowing_decreases_inventory(self):
+    @patch('library.serializers.send_borrowing_notification.delay')
+    def test_create_borrowing_decreases_inventory(self, mock_notification):
         """Test 3: Creating borrowing decreases book inventory by 1"""
         initial_inventory = self.book.inventory
 
@@ -118,7 +120,11 @@ class BorrowingCreateSerializerTests(TestCase):
         self.book.refresh_from_db()
         self.assertEqual(self.book.inventory, initial_inventory - 1)
 
-    def test_cannot_borrow_book_with_zero_inventory(self):
+        # Проверяем, что уведомление было отправлено
+        mock_notification.assert_called_once()
+
+    @patch('library.serializers.send_borrowing_notification.delay')
+    def test_cannot_borrow_book_with_zero_inventory(self, mock_notification):
         """Test 4: Cannot borrow book with zero inventory"""
         self.book.inventory = 0
         self.book.save()
@@ -216,8 +222,27 @@ class BorrowingReturnSerializerTests(TestCase):
 
         return MockRequest(user)
 
-    def test_return_increases_inventory(self):
+    @patch('library.serializers.send_return_notification.delay')
+    @patch('library.serializers.StripeService.get_or_create_session_for_borrowing')
+    @patch('library.serializers.PaymentCreateSerializer')
+    def test_return_increases_inventory(
+            self,
+            mock_payment_serializer,
+            mock_stripe,
+            mock_notification
+    ):
         """Test 7: Returning book increases inventory by 1"""
+        # Mock payment creation
+        mock_payment_instance = MagicMock()
+        mock_payment_serializer.return_value.is_valid.return_value = True
+        mock_payment_serializer.return_value.save.return_value = mock_payment_instance
+
+        # Mock Stripe session creation
+        mock_stripe.return_value = {
+            'session_id': 'test_session_id',
+            'session_url': 'https://stripe.com/test'
+        }
+
         initial_inventory = self.book.inventory
 
         serializer = BorrowingReturnSerializer(
@@ -231,6 +256,9 @@ class BorrowingReturnSerializerTests(TestCase):
 
         self.book.refresh_from_db()
         self.assertEqual(self.book.inventory, initial_inventory + 1)
+
+        # Проверяем, что уведомление было отправлено
+        mock_notification.assert_called_once()
 
     def test_cannot_return_book_twice(self):
         """Test 8: Cannot return book twice"""
